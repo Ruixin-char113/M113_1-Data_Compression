@@ -1,12 +1,19 @@
 /*
-* Function: Calculate a file's ENTROPY
+* Source Code From:
+*	NFU, CSIE, Subject: [113-1] Data Compression
+* Function:
+*	Calculate a file's ENTROPY
 * Input:
+*	File: 
+*		entropyText.txt
 * Output:
-* Example:
-*	Input:
-*	Output:
-* Entropy = logBase2(1 / Pi)
-*	Pi = probability of i
+*	Show on the CMD
+* Usage:
+*	cd /-113-1-Data-Compression/entropy/entropy/debug/
+*	entropy.exe entropyText.txt
+* Others:
+*	Entropy = logBase2(1 / Pi)
+*		Pi = probability of i
 */
 #define _CRT_SECURE_NO_WARNINGS // For C4996 "fopen function"
 #include <stdio.h>
@@ -45,7 +52,6 @@ char *argv[];
 			if (pb[i]!=0) {
 				inv=1.0/pb[i];
 				entropy=entropy+pb[i]*log(inv);
-				printf("%c: %f\n", i-'a'+'A', pb[i] * log(inv) / log(2));
 			}
 		}
 
