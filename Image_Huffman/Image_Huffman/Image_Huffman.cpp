@@ -6,7 +6,6 @@
 #include <fstream>
 #include <bitset>
 #include <algorithm>
-#define pixelLengthWidth = 512
 using namespace std;
 
 // write BMP Header to file
@@ -157,6 +156,135 @@ void writeLennaCompression(FILE* sourceData, const char* outputFileLennaCompress
     }
 
     lennaCompressionStream.close();
+    cout << "[SUCCEED] Write to \"" << outputFileLennaCompression << "\"" << endl;
+}
+
+// ===============================================================================================================================
+
+// Store Huffman Code for decode
+void readHuffmanTable(const char* inputFileHuffmanTable, string* huffTableDecode) {
+
+    // Open "huffTable.txt"
+    ifstream huffmanTable(inputFileHuffmanTable);
+    if (!huffmanTable.is_open()) {
+        cout << "[ERROR] Can't Open \"" << inputFileHuffmanTable << "\"" << endl;
+        huffmanTable.close();
+        return;
+    }
+
+    // Read huffman code to "huffTableDecode[]"
+    string tempHuffmanCode;
+    int lineNumber = 0;
+    while (getline(huffmanTable, tempHuffmanCode)) {
+        huffTableDecode[lineNumber] = tempHuffmanCode;
+        lineNumber++;
+    }
+
+    /*for (int i = 0; i < 256; i++) {
+        cout << huffTableDecode[i] << endl;
+    }*/
+
+    cout << "[SUCCEED] Store Huffman Table from: \"" << inputFileHuffmanTable << "\"" << endl;
+    huffmanTable.close();
+}
+
+void decodeHuffmanPushOut(ofstream* image_rBMP, const char readChar, string* bufferString, const string* huffTableDecode, bool endOfData) {
+    // Store encode huffman code
+    string huffmanString = bitset<8>(static_cast<unsigned char>(readChar)).to_string();
+
+    /*int pointerHuffmanString = 0;*/
+    while (!huffmanString.empty()) {
+        // add 1 char to bufferString
+        *bufferString += huffmanString.substr(0, 1);
+        // update huffmanString: << 1 char
+        if (huffmanString.length() > 1)
+            huffmanString = huffmanString.substr(1, huffmanString.length() - 1);
+        else
+            huffmanString.clear();
+
+        // check 0 - 255
+        for (int checkPointer = 0; checkPointer < 256; checkPointer++) {
+            if (huffTableDecode[checkPointer] == *bufferString) {
+                // cout << hex << checkPointer << " ";
+
+                *image_rBMP << (char)checkPointer;
+
+                bufferString->clear();
+            }
+        }
+
+        // point to next string char;
+        //pointerHuffmanString++;
+    }
+}
+
+// Decode
+void decodeHuffman(const char* inputFileLennaCompressed, ofstream* image_rBMP, const string* huffTableDecode) {
+    ifstream lennaCompressed(inputFileLennaCompressed, ios::in | ios::binary);
+
+    // Open "lennaCompression.txt"
+    if (!lennaCompressed.is_open()) {
+        cout << "[ERROR] Can't Open \"" << inputFileLennaCompressed << "\"" << endl;
+        lennaCompressed.close();
+        return;
+    }
+
+    // Read encode Huffman code byte by byte
+    char readChar;
+    string bufferString;
+    bool endOfData = 0;
+    int countHandleByte = 0;
+    while (lennaCompressed.read(&readChar, sizeof(readChar))) {
+        /*cout << hex << uppercase << (0xFF & readChar) << " ";*/
+        if (countHandleByte == 512 * 512 - 1)
+            endOfData = true;
+
+        decodeHuffmanPushOut(image_rBMP, readChar, &bufferString, huffTableDecode, endOfData);
+
+        countHandleByte++;
+    }
+
+    lennaCompressed.close();
+    cout << "Last buffer: \"" << bufferString << "\"" << endl;
+    cout << "[SUCCEED] Decode from: \"" << inputFileLennaCompressed << "\"" << endl;
+}
+
+// write to lenna_r.bmp, read "bmpHeader.txt", 
+void writeDecodeFile(const char* outputFIleImageR, const char* inputFileHeader,
+                        const char* inputFileLennaCompressed, const string* huffTableDecode) {
+    // "bmpHeader.txt", "lenna_r.bmp"
+    ifstream bmpHeader(inputFileHeader, ios::in | ios::binary);
+        if (!bmpHeader.is_open()) {
+        cout << "[ERROR] Can't Open \"" << inputFileHeader << "\"" << endl;
+        bmpHeader.close();
+        return;
+    }
+    ofstream image_rBMP(outputFIleImageR, ios::out | ios::binary);
+        if (!image_rBMP.is_open()) {
+            cout << "[ERROR] Can't Open \"" << outputFIleImageR << "\"" << endl;
+            image_rBMP.close();
+            return;
+        }
+
+    // write BMP Header
+    char readChar;
+    int pointerReadChar = 0;
+    while (bmpHeader.read(&readChar, sizeof(readChar))) {
+        image_rBMP << readChar;
+        //cout << hex << (int)(unsigned char)readChar << " ";
+    }
+
+    // write pixel array
+    decodeHuffman(inputFileLennaCompressed, &image_rBMP, huffTableDecode);
+
+    // add byte to pixel array, make it 4 bytes
+    for (int addByte = 0; addByte < 1078 % 4; addByte++) {
+        image_rBMP << char(0);
+    }
+
+    bmpHeader.close();
+    image_rBMP.close();
+    cout << "[SUCCEED] Write decode image: \"" << outputFIleImageR << "\"" << endl;
 }
 
 //================================================================================================================================
@@ -247,7 +375,7 @@ public:
     }
 
     void buildHuffmanTree() {
-        cout << "[START] Creating Huffman Tree" << endl;
+        //cout << "[START] Creating Huffman Tree" << endl;
         // For huffman tree create node;
         Node* left     = NULL;
         Node* right    = NULL;
@@ -364,7 +492,7 @@ public:
             sethuffValueFun(currentNode->getRightChild(), huffValue + '0', huffTable);
         // handle leaf node
         if (currentNode->getLeftChild() == NULL && currentNode->getRightChild() == NULL) {
-            cout << "[" << currentNode->getName() << "] \t" << huffValue << endl;
+            //cout << "[" << currentNode->getName() << "] \t" << huffValue << endl;
             huffTable[currentNode->getName()] = huffValue;
         }
     }
@@ -391,15 +519,17 @@ int main() {
     const char* outputFileName      = "bmpHeader.txt";
     const char* outputFileHuffTable = "huffTable.txt";
     const char* outputFileLennaCompression = "lennaCompression.txt";
+    const char* outputFIleImageR    = "lenna_r.bmp";
 
 	int pixelCount[256] = { 0 };
     string huffTable[256];
+    string huffTableDecode[256];
 	FILE* sourceData;
 	errno_t err;
 
 	err = fopen_s(&sourceData, openFileName, "rb");
 	if (err == 0) {
-		cout << "[SUCCEED] Open File: \"" << openFileName << "\"!" << endl;
+		cout << "[SUCCEED] Open File: \"" << openFileName << "\"" << endl;
 
         // Handle BMPHeader
         writeBMPHeader(sourceData, outputFileName);
@@ -407,28 +537,30 @@ int main() {
         // Collect pixel value to pixelCount
         writeBMPPixelArray(sourceData, pixelCount);
 
-        //================================================================================================================================
+        //======= Create Huffman Tree ===================================================
         HuffmanTree huff;
 
         huff.linkNode(pixelCount);
         huff.buildHuffmanTree();
         huff.setHuffValue(huffTable);
-
-        /*for (int i = 0; i < 256; i++) {
-            cout << "[" << i << "] " << huffTable[i] << endl;
-        }*/
-        //================================================================================================================================
+        //======= End of Create Huffman Tree ============================================
         
         // write huffman table to "huffTable.txt"
         writeHuffmanTable(outputFileHuffTable, huffTable);
 
         // compression lenna.bmp
         writeLennaCompression(sourceData, outputFileLennaCompression, huffTable);
+
+        // Store huffman code table
+        readHuffmanTable(outputFileHuffTable, huffTableDecode);
         
+        // Write decode image
+        writeDecodeFile(outputFIleImageR, outputFileName, outputFileLennaCompression, huffTableDecode);
+
         // Close File
 		fclose(sourceData); 
 
-		cout << "[INFO] Process completed!" << endl;
+		cout << "[INFO] Process completed" << endl;
 	}
 	else {
 		cout << "[ERROR] Failed to open file: \"" << openFileName << "\"!" << endl;
