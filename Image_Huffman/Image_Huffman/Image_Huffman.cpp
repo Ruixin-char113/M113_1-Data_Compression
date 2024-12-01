@@ -5,6 +5,7 @@
 #include <vector>
 #include <fstream>
 #include <bitset>
+#include <algorithm>
 #define pixelLengthWidth = 512
 using namespace std;
 
@@ -62,6 +63,7 @@ void writeHuffmanTable(const char* outputFileHuffTable, const string* huffTable)
     huffTableStream.open(outputFileHuffTable);
     if (!huffTableStream.is_open()) {
         cout << "[ERROR] Can't Open \"" << outputFileHuffTable << "\"" << endl;
+        huffTableStream.close();
         return;
     }
 
@@ -73,6 +75,43 @@ void writeHuffmanTable(const char* outputFileHuffTable, const string* huffTable)
     huffTableStream.close();
 }
 
+// Push huffman code to ofstream
+void pushOutHuffmanCode(ofstream* lennaCompressionStream, string* buffString, string* huffCodeString, bool endOfData) {
+    do{
+        // Total of buffer can store
+        int pushLength = 8 - buffString->length();
+        // Total of huffman can push
+        int pushLimit = huffCodeString->length();
+        // Calculate min of push bit
+        int pushBit = min(pushLength, pushLimit);
+
+        // Push huffman code to buffer
+        *buffString += huffCodeString->substr(0, pushBit);
+        if (buffString->length() == 8) {
+            char buffChar = static_cast<char>(bitset<8>(*buffString).to_ullong());
+            *lennaCompressionStream << buffChar;
+            buffString->clear();
+        }
+
+        // Adjust huffCodeString
+        if (huffCodeString->length() - pushBit)
+            *huffCodeString = huffCodeString->substr(pushBit, huffCodeString->length() - pushBit);
+        else
+            *huffCodeString = "";
+
+        // Endofdata && buffer has data && No other data
+        if (endOfData && !buffString->empty() && huffCodeString->empty()) {
+            int addLimit = 8 - buffString->length();
+            for (int i = 0; i < addLimit; i++)
+                *buffString += "0";
+            char buffChar = static_cast<char>(bitset<8>(*buffString).to_ullong());
+            *lennaCompressionStream << buffChar;
+            buffString->clear();
+        }
+            
+    }while (!huffCodeString->empty());
+}
+
 // use huffman table encode lenna pixel array
 void writeLennaCompression(FILE* sourceData, const char* outputFileLennaCompression, const string* huffTable) {
     ofstream lennaCompressionStream;
@@ -81,17 +120,31 @@ void writeLennaCompression(FILE* sourceData, const char* outputFileLennaCompress
     lennaCompressionStream.open(outputFileLennaCompression, ios::out | ios::binary);
     if (!lennaCompressionStream.is_open()) {
         cout << "[ERROR] Can't Open \"" << outputFileLennaCompression << "\"" << endl;
+        lennaCompressionStream.close();
         return;
     }
 
     // From 1078 to "1078 + 512 * 512"
     int iLimit = 1078 + 512 * 512;
+    // For output code
+    string buffString;
+    // End of data
+    bool endOfData = 0;
     for (int i = 1078; i < iLimit; i++) {
+        if (i == iLimit - 1)
+            endOfData = 1;
         // move to next pixel
         if (fseek(sourceData, i, SEEK_SET) == 0) {
+            // read 1 pixel
             unsigned char pixelValue;
             if (fread(&pixelValue, 1, 1, sourceData) == 1) {
-                lennaCompressionStream << huffTable[(int)pixelValue];
+                // huffman code
+                string huffCodeString = huffTable[(int)pixelValue];
+
+                // Push huffman code to buffString
+                pushOutHuffmanCode(&lennaCompressionStream, &buffString, &huffCodeString, endOfData);
+
+                lennaCompressionStream;
                 /*for (int stringPointer = 0; stringPointer < huffTable[(int)pixelValue].length(); stringPointer++) {
                     if (huffTable[(int)pixelValue][stringPointer] == '1')
                         lennaCompressionStream <<  bitset<1>('1'-'0');
