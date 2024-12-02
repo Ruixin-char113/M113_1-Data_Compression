@@ -75,7 +75,7 @@ void writeHuffmanTable(const char* outputFileHuffTable, const string* huffTable)
 }
 
 // Push huffman code to ofstream
-void pushOutHuffmanCode(ofstream* lennaCompressionStream, string* buffString, string* huffCodeString, bool endOfData) {
+void pushOutHuffmanCode(ofstream* lennaCompressionStream, string* buffString, string* huffCodeString, bool endOfData, int *countByte) {
     do{
         // Total of buffer can store
         int pushLength = 8 - buffString->length();
@@ -89,6 +89,7 @@ void pushOutHuffmanCode(ofstream* lennaCompressionStream, string* buffString, st
         if (buffString->length() == 8) {
             char buffChar = static_cast<char>(bitset<8>(*buffString).to_ullong());
             *lennaCompressionStream << buffChar;
+            *countByte += 1;
             buffString->clear();
         }
 
@@ -105,6 +106,7 @@ void pushOutHuffmanCode(ofstream* lennaCompressionStream, string* buffString, st
                 *buffString += "0";
             char buffChar = static_cast<char>(bitset<8>(*buffString).to_ullong());
             *lennaCompressionStream << buffChar;
+            *countByte += 1;
             buffString->clear();
         }
             
@@ -129,6 +131,8 @@ void writeLennaCompression(FILE* sourceData, const char* outputFileLennaCompress
     string buffString;
     // End of data
     bool endOfData = 0;
+
+    int countByte = 0;
     for (int i = 1078; i < iLimit; i++) {
         if (i == iLimit - 1)
             endOfData = 1;
@@ -141,7 +145,7 @@ void writeLennaCompression(FILE* sourceData, const char* outputFileLennaCompress
                 string huffCodeString = huffTable[(int)pixelValue];
 
                 // Push huffman code to buffString
-                pushOutHuffmanCode(&lennaCompressionStream, &buffString, &huffCodeString, endOfData);
+                pushOutHuffmanCode(&lennaCompressionStream, &buffString, &huffCodeString, endOfData, &countByte);
 
                 lennaCompressionStream;
                 /*for (int stringPointer = 0; stringPointer < huffTable[(int)pixelValue].length(); stringPointer++) {
@@ -155,6 +159,7 @@ void writeLennaCompression(FILE* sourceData, const char* outputFileLennaCompress
         }
     }
 
+    cout << "\t[CALCULATE] Bits per pixel(contain padding bits): " << ((double)countByte * 8) / (262144) << endl;
     lennaCompressionStream.close();
     cout << "[SUCCEED] Write to \"" << outputFileLennaCompression << "\"" << endl;
 }
@@ -285,6 +290,40 @@ void writeDecodeFile(const char* outputFIleImageR, const char* inputFileHeader,
     bmpHeader.close();
     image_rBMP.close();
     cout << "[SUCCEED] Write decode image: \"" << outputFIleImageR << "\"" << endl;
+}
+
+//================================================================================================================================
+
+void calculateMSE(const char* sourceImage, const char* decodeImage) {
+    ifstream sourceStream(sourceImage);
+    ifstream decodeStream(decodeImage);
+
+    // Open "lenna.bmp", "lenna_r.bmp"
+    if (!sourceStream.is_open()) {
+        cout << "[ERROR] Can't Open \"" << sourceImage << "\"" << endl;
+        sourceStream.close();
+        return;
+    }
+    if (!decodeStream.is_open()) {
+        cout << "[ERROR] Can't Open \"" << decodeImage << "\"" << endl;
+        decodeStream.close();
+        return;
+    }
+
+    char sourceChar;
+    char decodeChar;
+    int MSE = 0;
+    // Read 1 byte from both of images
+    while (sourceStream.read(&sourceChar, sizeof(sourceChar)) && decodeStream.read(&decodeChar, sizeof(decodeChar))) {
+        MSE += pow((int)(sourceChar - decodeChar), 2);
+    }
+
+    MSE /= 262144;
+
+    cout << "\t[CALCULATE] MSE (Mean-Square Error): " << MSE << endl;
+
+    sourceStream.close();
+    decodeStream.close();
 }
 
 //================================================================================================================================
@@ -515,7 +554,7 @@ private:
 //================================================================================================================================
 int main() {
     // Input or Output file name
-	const char* openFileName        = "lena_gray.bmp";
+	const char* openFileName        = "lenna.bmp";
     const char* outputFileName      = "bmpHeader.txt";
     const char* outputFileHuffTable = "huffTable.txt";
     const char* outputFileLennaCompression = "lennaCompression.txt";
@@ -556,6 +595,9 @@ int main() {
         
         // Write decode image
         writeDecodeFile(outputFIleImageR, outputFileName, outputFileLennaCompression, huffTableDecode);
+
+        // Calculate MSE(Mean-Square Error)
+        calculateMSE(openFileName, outputFIleImageR);
 
         // Close File
 		fclose(sourceData); 
