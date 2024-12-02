@@ -312,10 +312,10 @@ void calculateMSE(const char* sourceImage, const char* decodeImage) {
 
     char sourceChar;
     char decodeChar;
-    int MSE = 0;
+    double MSE = 0;
     // Read 1 byte from both of images
     while (sourceStream.read(&sourceChar, sizeof(sourceChar)) && decodeStream.read(&decodeChar, sizeof(decodeChar))) {
-        MSE += pow((int)(sourceChar - decodeChar), 2);
+        MSE += pow((sourceChar - decodeChar), 2);
     }
 
     MSE /= 262144;
@@ -603,6 +603,7 @@ int main() {
 		fclose(sourceData); 
 
 		cout << "[INFO] Process completed" << endl;
+        system("pause");
 	}
 	else {
 		cout << "[ERROR] Failed to open file: \"" << openFileName << "\"!" << endl;
